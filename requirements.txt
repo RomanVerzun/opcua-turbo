@@ -1,0 +1,9 @@
+# OPC UA Smart Reader & Writer - Dependencies
+# Python >= 3.8 required
+
+# Core OPC UA library
+asyncua>=1.1.0,<2.0.0
+
+# Optional dependencies for development and testing
+pytest>=7.0.0
+pytest-asyncio>=0.21.0
