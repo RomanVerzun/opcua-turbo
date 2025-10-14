@@ -1,0 +1,3 @@
+"""
+OPC UA tests package
+"""
