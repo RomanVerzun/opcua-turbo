@@ -18,6 +18,7 @@ from .navigation.navigator import (
 
 # Client
 from .client.reader import OPCUAReader, find_and_read_variable, read_object_children
+from .client.writer import OPCUAWriter, write_values
 
 # Parsing
 from .parsing.formatter import format_output, JSONFormatter, TreeFormatter
@@ -49,6 +50,8 @@ __all__ = [
     "OPCUAReader",
     "find_and_read_variable",
     "read_object_children",
+    "OPCUAWriter",
+    "write_values",
 
     # Parsing
     "format_output",
