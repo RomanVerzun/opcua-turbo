@@ -44,8 +44,9 @@ async def read_object_children(
                     value = await child.read_value()
                     formatted_value = await format_value(child, value, client, type_cache)
                     return (child_name.Text, formatted_value)
-            except Exception:
-                pass
+            except Exception as e:
+                import logging
+                logging.getLogger(__name__).debug(f"Помилка читання дочірнього вузла: {e}")
             return None
         
         results = await asyncio.gather(*[read_single_child(child) for child in children], return_exceptions=True)
@@ -118,29 +119,49 @@ class OPCUAReader:
             data = await reader.read_node("cepn1")
     """
     
-    def __init__(self, url: str, target_object: str = TARGET_OBJECT_NAME):
+    def __init__(self, url: str, target_object: str = TARGET_OBJECT_NAME, timeout: float = 30.0):
         """
         Ініціалізація reader.
-        
+
         Args:
             url: URL OPC UA сервера
             target_object: Ім'я цільового об'єкта
+            timeout: Таймаут підключення та операцій (в секундах)
+
+        Raises:
+            ValueError: Якщо URL має невірний формат
         """
+        # Валідація URL
+        if not url or not isinstance(url, str):
+            raise ValueError(f"Невалідний URL: {url}")
+        if not url.startswith("opc.tcp://"):
+            raise ValueError(f"URL має починатися з 'opc.tcp://': {url}")
+
         self.url = url
         self.target_object = target_object
+        self.timeout = timeout
         self.cache = TypeCache()
         self.client: Optional[Client] = None
         self._epac_node: Optional[Node] = None
-    
+
     async def connect(self) -> None:
-        """Підключення до OPC UA сервера."""
+        """Підключення до OPC UA сервера з таймаутом."""
         self.client = Client(url=self.url)
-        await self.client.connect()
-        
+        try:
+            await asyncio.wait_for(self.client.connect(), timeout=self.timeout)
+        except asyncio.TimeoutError:
+            raise RuntimeError(f"Таймаут підключення до {self.url} ({self.timeout}s)")
+
         # Знаходимо цільовий об'єкт
         root = self.client.nodes.objects
-        self._epac_node = await find_specific_object(root, self.target_object)
-        
+        try:
+            self._epac_node = await asyncio.wait_for(
+                find_specific_object(root, self.target_object),
+                timeout=self.timeout
+            )
+        except asyncio.TimeoutError:
+            raise RuntimeError(f"Таймаут пошуку об'єкта '{self.target_object}' ({self.timeout}s)")
+
         if self._epac_node is None:
             raise RuntimeError(f"Об'єкт '{self.target_object}' не знайдено")
     
@@ -187,9 +208,13 @@ class OPCUAReader:
         parent_objects = await get_child_objects(self._epac_node, level=0, max_level=5)
         
         async def read_child_object(obj_node, obj_name):
-            assert self.client is not None
-            values = await read_object_children(obj_node, self.client, self.cache)
-            return (obj_name, values) if values else None
+            if self.client is None:
+                return None
+            try:
+                values = await read_object_children(obj_node, self.client, self.cache)
+                return (obj_name, values) if values else None
+            except Exception:
+                return None
         
         tasks = [read_child_object(obj_node, obj_name) for obj_node, obj_name in parent_objects]
         results = await asyncio.gather(*tasks, return_exceptions=True)
@@ -208,7 +233,11 @@ class OPCUAReader:
     
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         """Context manager exit."""
-        await self.disconnect()
+        try:
+            await self.disconnect()
+        except Exception:
+            pass  # Ensure disconnect is attempted even if it fails
+        return False  # Don't suppress exceptions
     
     def get_cache_stats(self) -> Dict[str, int]:
         """Отримати статистику кешу."""

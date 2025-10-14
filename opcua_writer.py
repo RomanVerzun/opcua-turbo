@@ -213,12 +213,25 @@ async def write_values(
         >>>     results = await write_values(client, data)
     """
     results = {}
-    
+
     # Групуємо записи по батьківському вузлу для оптимізації
     grouped_writes = {}
-    
+
     for path, value in data.items():
+        # Валідація шляху
+        if not path or not isinstance(path, str):
+            logger.error(f"Невалідний шлях: {path}")
+            results[str(path)] = False
+            continue
+
         parts = path.split('.')
+        parts = [p for p in parts if p]  # Видалити порожні рядки
+
+        if not parts:
+            logger.error(f"Порожній шлях після обробки: {path}")
+            results[path] = False
+            continue
+
         if len(parts) >= 2:
             parent_path = '.'.join(parts[:-1])
             field_name = parts[-1]
@@ -253,21 +266,39 @@ async def write_values(
             if is_array and len(fields) > 1 and current_value is not None:
                 # Це масив і потрібно записати кілька полів - оптимізуємо
                 new_array = list(current_value)
-                
+
                 for field_name, value in fields.items():
                     if field_name is None:
                         continue
-                    
+
                     # Знайти індекс поля
                     index = await _get_array_field_index(parent_node, field_name)
-                    if index is not None and index < len(new_array):
-                        new_array[index] = int(value) if isinstance(value, bool) else value
-                        full_path = f"{parent_path}.{field_name}"
-                        results[full_path] = True
-                    else:
-                        full_path = f"{parent_path}.{field_name}"
+                    full_path = f"{parent_path}.{field_name}"
+
+                    if index is None:
                         logger.error(f"Поле '{field_name}' не знайдено в масиві")
                         results[full_path] = False
+                    elif index >= len(new_array):
+                        logger.error(f"Індекс {index} поза межами масиву розміру {len(new_array)}")
+                        results[full_path] = False
+                    else:
+                        # Правильна конвертація типу
+                        if auto_convert:
+                            try:
+                                child_node = await parent_node.get_children()
+                                if index < len(child_node):
+                                    variant_type = await get_node_variant_type(child_node[index], client)
+                                    if variant_type == ua.VariantType.Boolean:
+                                        new_array[index] = bool(value)
+                                    else:
+                                        new_array[index] = value
+                                else:
+                                    new_array[index] = value
+                            except Exception:
+                                new_array[index] = value
+                        else:
+                            new_array[index] = value
+                        results[full_path] = True
                 
                 # Записати весь масив одразу
                 if auto_convert:

@@ -165,23 +165,23 @@ async def get_enum_strings(node: Node) -> Optional[List[str]]:
 async def parse_bitmask(value: int, bit_names: List[str]) -> Dict[str, int]:
     """
     Розпаковує бітову маску у словник з іменами бітів.
-    
+
     Args:
         value: Числове значення (бітова маска)
         bit_names: Список імен для кожного біта
-        
+
     Returns:
-        Словник {ім'я_біта: значення}
+        Словник {ім'я_біта: значення}. Якщо value не int, повертає порожній словник.
     """
     if not isinstance(value, int):
-        return value
-    
+        return {}  # Повертаємо порожній словник замість value
+
     result = {}
-    
+
     for i, bit_name in enumerate(bit_names):
         bit_value = (value >> i) & 1
         result[bit_name] = bit_value
-    
+
     return result
 
 
