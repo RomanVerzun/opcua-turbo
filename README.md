@@ -1,37 +1,27 @@
-# OPC UA Smart Reader & Writer v2.0
+# OPC UA Smart Reader & Writer v2.1
 
 Модульний пакет для роботи з OPC UA з автоматичним визначенням типів. Швидкість ~0.3 сек.
 
 ## ✨ Особливості
 
 - ⚡ Блискавична швидкість (~0.3 сек)
-- 🏗️ Модульна архітектура
+- 🏗️ Модульна архітектура з src/ layout
 - 🔍 Автоматичне визначення типів
 - 📊 Підтримка всіх типів OPC UA
-- 🔄 Зворотна сумісність
+- 🔄 Зворотна сумісність через compatibility wrappers
+- ✍️ Підтримка як читання, так і запису
+- 🧪 Повне покриття тестами
 
 ## 🚀 Швидкий старт
 
 ### Встановлення
 
 ```bash
-source venv/bin/activate
-```
+# Встановлення з репозиторію
+pip install -e .
 
-### CLI (командний рядок)
-
-```bash
-# Читання одного вузла
-python opcua_reader.py opc.tcp://server:4840 --node cepn1
-
-# JSON формат
-python opcua_reader.py opc.tcp://server:4840 --node valve1 --format json
-
-# Всі вузли
-python opcua_reader.py opc.tcp://server:4840
-
-# Debug режим
-python opcua_reader.py opc.tcp://server:4840 --node cepn1 --debug
+# Або активація віртуального середовища
+source .venv/bin/activate
 ```
 
 ## 📚 Приклади використання
@@ -42,7 +32,7 @@ python opcua_reader.py opc.tcp://server:4840 --node cepn1 --debug
 
 ```python
 import asyncio
-from opcua import OPCUAReader
+from src.opcua import OPCUAReader
 
 async def main():
     async with OPCUAReader("opc.tcp://server:4840") as reader:
@@ -56,15 +46,15 @@ asyncio.run(main())
 #### Приклад 2: Ручне керування підключенням
 
 ```python
-from opcua import OPCUAReader
+from src.opcua import OPCUAReader
 
 async def main():
     reader = OPCUAReader("opc.tcp://server:4840")
     await reader.connect()
-    
+
     data = await reader.read_node("valve1")
     print(data)
-    
+
     await reader.disconnect()
 
 asyncio.run(main())
@@ -73,95 +63,96 @@ asyncio.run(main())
 #### Приклад 3: Читання всіх вузлів
 
 ```python
+from src.opcua import OPCUAReader, format_output
+
 async with OPCUAReader("opc.tcp://server:4840") as reader:
     all_data = await reader.read_all()
-    print(f"Знайдено {len(all_data)} об'єктів")
-    for name, values in all_data.items():
-        print(f"  • {name}: {len(values)} змінних")
-```
 
-#### Приклад 4: Статистика кешу
+    # JSON формат
+    print(format_output(all_data, format_type="json"))
 
-```python
-async with OPCUAReader("opc.tcp://server:4840") as reader:
-    await reader.read_node("cepn1")
-    await reader.read_node("valve1")
-    
-    stats = reader.get_cache_stats()
-    print(f"Hits: {stats['hits']}, Misses: {stats['misses']}")
-    print(f"Hit rate: {stats['hit_rate']}%")
+    # Tree формат (за замовчуванням)
+    print(format_output(all_data, format_type="tree"))
 ```
 
 ### Запис даних
 
-#### Приклад 1: Простий запис
+#### Приклад 1: Використання OPCUAWriter класу (рекомендований)
 
 ```python
-from asyncua import Client
-from opcua_writer import write_values
+from src.opcua import OPCUAWriter
 
 async def main():
     data = {
         "cepn1.sensor1": 1,
         "cepn1.sensor2": 1,
+        "cepn1.test": True,
     }
-    
-    async with Client("opc.tcp://server:4840") as client:
-        results = await write_values(client, data)
+
+    async with OPCUAWriter("opc.tcp://server:4840") as writer:
+        results = await writer.write(data)
         print(f"Записано: {sum(results.values())}/{len(results)}")
 
 asyncio.run(main())
 ```
 
-#### Приклад 2: Запис в кілька вузлів
+#### Приклад 2: Використання функції write_values
 
 ```python
-data = {
-    "cepn1.test": 1,
-    "cepn1.frequency": 1500,
-    "valve1.position": 50,
-    "valve2.position": 75,
-}
-
-async with Client("opc.tcp://server:4840") as client:
-    results = await write_values(client, data)
-    
-    success = [k for k, v in results.items() if v]
-    failed = [k for k, v in results.items() if not v]
-    
-    print(f"✓ Успішно: {len(success)}")
-    print(f"✗ Помилки: {len(failed)}")
-```
-
-#### Приклад 3: Різні типи даних
-
-```python
-data = {
-    "cepn1.test": 1,           # int
-    "cepn1.run": True,         # bool
-    "cepn1.frequency": 1500,   # int
-}
-
-async with Client("opc.tcp://server:4840") as client:
-    results = await write_values(client, data)
-    print(f"Записано: {sum(results.values())}/{len(results)}")
-```
-
-### Старий API (зворотна сумісність)
-
-```python
-from opcua import find_specific_object, find_and_read_variable, TypeCache
+from src.opcua import write_values
 from asyncua import Client
 
 async def main():
-    cache = TypeCache()
+    data = {
+        "cepn1.test": 1,
+        "cepn1.frequency": 1500,
+        "valve1.position": 50,
+    }
+
     async with Client("opc.tcp://server:4840") as client:
-        root = client.nodes.objects
-        epac = await find_specific_object(root, "ePAC:Project")
-        data = await find_and_read_variable(epac, "cepn1", client, cache)
-        print(data)
+        results = await write_values(client, data)
+
+        for path, success in results.items():
+            status = "✓" if success else "✗"
+            print(f"{status} {path}")
 
 asyncio.run(main())
+```
+
+#### Приклад 3: Цикл читання-запис-читання
+
+```python
+from src.opcua import OPCUAReader, OPCUAWriter
+
+async def main():
+    # Читання поточного значення
+    async with OPCUAReader("opc.tcp://server:4840") as reader:
+        data_before = await reader.read_node("cepn1")
+        print(f"Перед: {data_before}")
+
+    # Запис нового значення
+    async with OPCUAWriter("opc.tcp://server:4840") as writer:
+        await writer.write({"cepn1.test": 42})
+
+    # Перевірка запису
+    async with OPCUAReader("opc.tcp://server:4840") as reader:
+        data_after = await reader.read_node("cepn1")
+        print(f"Після: {data_after}")
+
+asyncio.run(main())
+```
+
+### Зворотна сумісність (deprecated)
+
+Старий API все ще працює через compatibility wrappers:
+
+```python
+# Старий імпорт (з deprecation warning)
+from opcua import OPCUAReader, TypeCache
+from opcua_writer import write_values
+
+# Новий імпорт (рекомендований)
+from src.opcua import OPCUAReader, OPCUAWriter, TypeCache, write_values
 ```
 
 ## 🔧 API Документація
@@ -170,7 +161,11 @@ asyncio.run(main())
 
 **Конструктор:**
 ```python
-reader = OPCUAReader(url: str, target_object: str = "ePAC:Project")
+reader = OPCUAReader(
+    url: str,
+    target_object: str = "ePAC:Project",
+    timeout: float = 30.0
+)
 ```
 
 **Методи:**
@@ -185,6 +180,29 @@ reader = OPCUAReader(url: str, target_object: str = "ePAC:Project")
 async with OPCUAReader(url) as reader:
     # автоматичне підключення/відключення
     data = await reader.read_node("cepn1")
+```
+
+### OPCUAWriter
+
+**Конструктор:**
+```python
+writer = OPCUAWriter(
+    url: str,
+    target_object: str = "ePAC:Project",
+    timeout: float = 30.0
+)
+```
+
+**Методи:**
+- `await connect()` - підключення до сервера
+- `await disconnect()` - відключення від сервера
+- `await write(data: Dict[str, Any], auto_convert: bool = True)` - запис значень
+
+**Context Manager:**
+```python
+async with OPCUAWriter(url) as writer:
+    # автоматичне підключення/відключення
+    results = await writer.write({"cepn1.test": 1})
 ```
 
 ### write_values()
@@ -206,50 +224,75 @@ await write_values(
 
 **Повертає:** словник `{шлях: успіх}`
 
-### Функції модулів
-
-**opcua.navigator:**
-- `find_specific_object(node, name)` - пошук об'єкта
-- `get_child_objects(node, level, max_level)` - дочірні об'єкти
-- `find_node_by_path(client, path)` - пошук за шляхом
-
-**opcua.formatter:**
-- `format_output(data, format, timestamp)` - форматування виводу
-- `JSONFormatter.format(data, timestamp)` - JSON формат
-- `TreeFormatter.format(data, timestamp)` - Tree формат
-
-**opcua.cache:**
-- `TypeCache()` - кеш типів даних
-- `cache.get_stats()` - статистика кешування
-
 ## 📦 Структура проекту
 
 ```
-opcua/                  # Модульний пакет
-├── __init__.py         # Re-exports
-├── common.py           # Константи
-├── cache.py            # TypeCache
-├── navigator.py        # Навігація
-├── parser.py           # Парсинг
-├── formatter.py        # Форматування
-└── reader.py           # OPCUAReader
-
-opcua_reader.py         # CLI
-opcua_writer.py         # Writer
-reader_example.py       # Приклади читання
-writer_example.py       # Приклади запису
-main.py                 # Reader + Writer
+opcua-turbo/
+├── src/opcua/              # Головний пакет (нова структура)
+│   ├── __init__.py         # Public API
+│   ├── core/               # Основна функціональність
+│   │   ├── common.py       # Константи та типи
+│   │   ├── cache.py        # TypeCache з LRU
+│   │   └── type_conversion.py  # Конвертація типів
+│   ├── client/             # OPC UA клієнти
+│   │   ├── reader.py       # OPCUAReader
+│   │   └── writer.py       # OPCUAWriter
+│   ├── navigation/         # Навігація по дереву
+│   │   └── navigator.py    # Пошук вузлів
+│   └── parsing/            # Парсинг та форматування
+│       ├── parser.py       # Парсинг значень
+│       └── formatter.py    # JSON/Tree форматування
+├── opcua/                  # Старий пакет (compatibility wrapper)
+├── tests/                  # Тести pytest
+│   ├── conftest.py         # Fixtures
+│   └── test_opcua.py       # Основні тести
+├── examples/               # Приклади використання
+│   ├── simple_reader.py    # Простий Reader
+│   ├── simple_writer.py    # Простий Writer
+│   └── combined_operations.py  # Комплексні операції
+├── docs/                   # Документація
+├── README.md               # Цей файл
+├── USAGE.md                # Детальні інструкції
+└── requirements.txt        # Залежності
 ```
 
-## ⚙️ Параметри CLI
+## 🧪 Тестування
+
+### Запуск тестів з pytest
 
 ```bash
-python opcua_reader.py <url> [опції]
+# Всі тести
+pytest tests/
 
-Опції:
-  --node <name>         Конкретний вузол для читання
-  --format {tree,json}  Формат виводу (за замовчуванням: tree)
-  --debug               Режим відладки зі статистикою
+# Конкретний тест
+pytest tests/test_opcua.py::test_reader_connect
+
+# З verbose виводом
+pytest -v tests/
+
+# З покриттям
+pytest --cov=src/opcua tests/
+```
+
+### Запуск тестів без pytest
+
+```bash
+python tests/test_opcua.py
+```
+
+## 📖 Приклади
+
+Дивіться директорію `examples/` для детальних прикладів:
+
+```bash
+# Простий Reader
+python examples/simple_reader.py
+
+# Простий Writer
+python examples/simple_writer.py
+
+# Комплексні операції
+python examples/combined_operations.py
 ```
 
 ## 🐛 Усунення проблем
@@ -258,7 +301,7 @@ python opcua_reader.py <url> [опції]
 ```
 ⚠ Об'єкт 'ePAC:Project' не знайдено
 ```
-→ Перевірте назву об'єкта через UaExpert
+→ Перевірте назву об'єкта через UaExpert або вкажіть інший target_object
 
 **Помилка підключення**
 ```
@@ -266,65 +309,52 @@ python opcua_reader.py <url> [опції]
 ```
 → Перевірте URL сервера, чи запущений сервер, firewall
 
-**Import error**
+**Import error (ModuleNotFoundError)**
 ```
-ModuleNotFoundError: No module named 'opcua'
+ModuleNotFoundError: No module named 'asyncua'
 ```
-→ Перевірте що директорія `opcua/` існує та містить `__init__.py`
+→ Активуйте віртуальне середовище: `source .venv/bin/activate`
+
+**Deprecation warnings**
+```
+DeprecationWarning: Importing from 'opcua' is deprecated
+```
+→ Оновіть імпорти на `from src.opcua import ...`
 
 ## 📦 Залежності
 
 - Python >= 3.8
 - asyncua >= 1.1.0
+- pytest >= 7.0.0 (для тестування)
+- pytest-asyncio >= 0.21.0 (для тестування)
 
 Встановлення:
 ```bash
-pip install asyncua
+pip install -r requirements.txt
 ```
 
-## 🎯 Приклади виводу
+## 🔄 Міграція з v2.0 на v2.1
 
-### Tree формат
-```
-[2025-10-14 18:49:02.824]
-----------------------------------------------------------------------
+Старий код продовжує працювати через compatibility wrappers:
 
-📦 valve1:
-   ├─ value_timeout: 0
-   ├─ motor_closed: 0
-   ├─ position: 50
-```
+```python
+# v2.0 (все ще працює, але deprecated)
+from opcua import OPCUAReader
+from opcua_writer import write_values
 
-### JSON формат
-```json
-{
-  "timestamp": "2025-10-14 18:49:02.824",
-  "data": {
-    "valve1": {
-      "value_timeout": 0,
-      "motor_closed": 0,
-      "position": 50
-    }
-  }
-}
+# v2.1 (рекомендований)
+from src.opcua import OPCUAReader, OPCUAWriter, write_values
 ```
 
-## 🚀 Запуск прикладів
-
-```bash
-# Приклади читання
-python reader_example.py
-
-# Приклади запису
-python writer_example.py
-
-# Reader + Writer разом
-python main.py
-```
+Зміни:
+- Додано `OPCUAWriter` клас (аналогічний до `OPCUAReader`)
+- Перенесено код в `src/opcua/` структуру
+- Старі імпорти працюють через wrapper з deprecation warning
+- Compatibility wrappers будуть видалені в v3.0
 
 ---
 
-**Версія**: 2.0.0  
-**Швидкість**: ~0.3 сек  
-**Архітектура**: Модульна  
+**Версія**: 2.1.0
+**Швидкість**: ~0.3 сек
+**Архітектура**: Модульна src/ layout
 **Python**: >= 3.8

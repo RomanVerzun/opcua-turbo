@@ -1,0 +1,112 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "opcua-turbo"
+version = "2.1.0"
+description = "Fast OPC UA Smart Reader & Writer with automatic type detection (~0.3s)"
+readme = "README.md"
+requires-python = ">=3.8"
+license = {text = "MIT"}
+authors = [
+    {name = "OPC UA Tools Team"},
+]
+keywords = ["opcua", "opc-ua", "industrial", "automation", "iot", "scada"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Manufacturing",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: System :: Monitoring",
+    "Operating System :: OS Independent",
+]
+
+dependencies = [
+    "asyncua>=1.1.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-asyncio>=0.21.0",
+    "pytest-cov>=4.0.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/yourusername/opcua-turbo"
+Documentation = "https://github.com/yourusername/opcua-turbo/blob/main/README.md"
+Repository = "https://github.com/yourusername/opcua-turbo"
+Changelog = "https://github.com/yourusername/opcua-turbo/blob/main/CHANGELOG.md"
+
+[project.scripts]
+opcua-reader = "opcua_reader:main"
+
+[tool.setuptools]
+packages = ["src.opcua", "src.opcua.core", "src.opcua.client", "src.opcua.navigation", "src.opcua.parsing"]
+
+[tool.setuptools.package-dir]
+"" = "."
+
+[tool.pytest.ini_options]
+minversion = "7.0"
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+asyncio_mode = "auto"
+addopts = "-v --strict-markers"
+
+[tool.coverage.run]
+source = ["src/opcua"]
+omit = [
+    "*/tests/*",
+    "*/examples/*",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
+    "if typing.TYPE_CHECKING:",
+]
+
+[tool.black]
+line-length = 100
+target-version = ['py38', 'py39', 'py310', 'py311']
+include = '\.pyi?$'
+exclude = '''
+/(
+    \.git
+  | \.venv
+  | \.eggs
+  | \.mypy_cache
+  | \.pytest_cache
+  | __pycache__
+  | build
+  | dist
+)/
+'''
+
+[tool.isort]
+profile = "black"
+line_length = 100
+known_first_party = ["opcua", "src"]
+
+[tool.mypy]
+python_version = "3.8"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = false
+ignore_missing_imports = true

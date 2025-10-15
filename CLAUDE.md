@@ -4,70 +4,96 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-OPC UA Smart Reader & Writer v2.0 - A modular Python package for working with OPC UA servers with automatic type detection. Optimized for speed (~0.3 seconds).
+OPC UA Smart Reader & Writer v2.1 - A modular Python package for working with OPC UA servers with automatic type detection. Optimized for speed (~0.3 seconds).
 
 **Key Features:**
-- Modular architecture with clean separation of concerns
+- Modern src/ layout architecture with clean layering
 - Automatic OPC UA type detection and formatting
-- TypeCache for optimized repeated reads
+- TypeCache with LRU eviction for optimized repeated reads
 - Support for complex data types (ExtensionObjects, arrays, bitmasks, enums)
-- Both high-level API (OPCUAReader class) and low-level functions
-- Backward compatibility with old API
+- Both OPCUAReader and OPCUAWriter classes with context manager support
+- Full backward compatibility with v2.0 through compatibility wrappers
+- Comprehensive test suite with pytest
+- Rich examples demonstrating all features
 
 ## Development Commands
 
 ### Running Tests
 ```bash
-# Run all tests (includes both async and sync tests)
-python test_opcua.py
+# Activate virtual environment first
+source .venv/bin/activate
 
-# For pytest (if installed)
-pytest test_opcua.py -v
+# Run all tests with pytest
+pytest tests/ -v
+
+# Run specific test
+pytest tests/test_opcua.py::test_reader_connect
+
+# Run with coverage
+pytest --cov=src/opcua tests/
+
+# Run tests without pytest (standalone)
+python tests/test_opcua.py
 ```
 
 ### Running Examples
 ```bash
-# CLI reading (single node)
+# Simple reader example
+python examples/simple_reader.py
+
+# Simple writer example
+python examples/simple_writer.py
+
+# Combined operations (comprehensive example)
+python examples/combined_operations.py
+
+# Old CLI interface (deprecated but still works)
 python opcua_reader.py opc.tcp://server:4840 --node cepn1
-
-# CLI reading (all nodes, JSON format)
-python opcua_reader.py opc.tcp://server:4840 --format json
-
-# Combined reader + writer example
-python main.py
-
-# Test reading from specific server
-python opcua_reader.py opc.tcp://10.15.194.150:4840 --node cepn1 --debug
 ```
 
 ### Python Environment
 ```bash
-# Activate virtual environment (if exists)
-source venv/bin/activate
+# Activate virtual environment
+source .venv/bin/activate
 
 # Install dependencies
-pip install asyncua
+pip install -r requirements.txt
+
+# Or install in editable mode
+pip install -e .
 ```
 
 ## Architecture
 
 ### Module Structure
 
-The codebase follows a **modular architecture** where each module has a single responsibility:
+The codebase follows a **modern src/ layout** with layered architecture:
 
 ```
-opcua/                     # Core package
-├── common.py             # Constants (TARGET_OBJECT_NAME, DEFAULT_MAX_DEPTH)
-├── cache.py              # TypeCache class - caches type metadata
-├── navigator.py          # Tree navigation - finding objects/nodes
-├── parser.py             # Value parsing - format_value, ExtensionObject handling
-├── formatter.py          # Output formatting (JSON, Tree)
-└── reader.py             # OPCUAReader class + read functions
+src/opcua/                     # Main package (v2.1)
+├── __init__.py               # Public API exports
+├── core/                     # Core functionality
+│   ├── common.py            # Constants, type aliases
+│   ├── cache.py             # TypeCache with LRU
+│   └── type_conversion.py   # Python ↔ OPC UA type conversion
+├── client/                   # OPC UA clients
+│   ├── reader.py            # OPCUAReader class
+│   └── writer.py            # OPCUAWriter class + write_values()
+├── navigation/               # Tree navigation
+│   └── navigator.py         # find_node_by_path, find_specific_object, etc.
+└── parsing/                  # Value parsing & formatting
+    ├── parser.py            # format_value, parse_extension_object
+    └── formatter.py         # JSONFormatter, TreeFormatter
 
-opcua_reader.py           # CLI entry point for reading
-opcua_writer.py           # Writer module with write_values()
-test_opcua.py             # Test suite
-main.py                   # Example combining reader + writer
+opcua/                        # Legacy package (compatibility wrapper)
+opcua_writer.py              # Legacy module (compatibility wrapper)
+tests/                       # Test suite
+├── conftest.py              # pytest fixtures
+└── test_opcua.py           # Main tests
+examples/                    # Usage examples
+├── simple_reader.py
+├── simple_writer.py
+└── combined_operations.py
 ```
 
 ### Key Architectural Patterns
@@ -146,14 +172,30 @@ main.py                   # Example combining reader + writer
 
 ## Common Patterns
 
-### Reading Pattern (Recommended)
+### Reading Pattern (Recommended - v2.1)
 ```python
+from src.opcua import OPCUAReader
+
 async with OPCUAReader(url) as reader:
     data = await reader.read_node("cepn1")
 ```
 
-### Writing Pattern
+### Writing Pattern (Recommended - v2.1)
 ```python
+from src.opcua import OPCUAWriter
+
+async with OPCUAWriter(url) as writer:
+    results = await writer.write({
+        "cepn1.sensor1": 1,
+        "valve1.position": 50
+    })
+```
+
+### Alternative Writing Pattern (low-level)
+```python
+from src.opcua import write_values
+from asyncua import Client
+
 async with Client(url) as client:
     results = await write_values(client, {
         "cepn1.sensor1": 1,
@@ -161,14 +203,15 @@ async with Client(url) as client:
     })
 ```
 
-### Legacy API (Backward Compatibility)
+### Legacy API (Backward Compatibility - deprecated)
 ```python
-from opcua import find_specific_object, find_and_read_variable, TypeCache
-cache = TypeCache()
-async with Client(url) as client:
-    root = client.nodes.objects
-    epac = await find_specific_object(root, "ePAC:Project")
-    data = await find_and_read_variable(epac, "cepn1", client, cache)
+# This still works but shows deprecation warnings
+from opcua import OPCUAReader, TypeCache
+from opcua_writer import write_values
+
+# Internally redirects to src.opcua
+async with OPCUAReader(url) as reader:
+    data = await reader.read_node("cepn1")
 ```
 
 ## Testing Notes

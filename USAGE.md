@@ -1,4 +1,4 @@
-# 📖 Як користуватися OPC UA Reader & Writer
+# 📖 Як користуватися OPC UA Reader & Writer v2.1
 
 Простий посібник для швидкого старту.
 
@@ -7,8 +7,8 @@
 ## 🔧 Підготовка
 
 ```bash
-cd /home/trainer/Documents/OPC_UA
-source venv/bin/activate
+cd /home/trainer/Documents/opcua-turbo
+source .venv/bin/activate
 ```
 
 ---
@@ -30,11 +30,11 @@ python opcua_reader.py opc.tcp://10.15.194.150:4840 --node valve1 --format json
 
 ### Через Python код
 
-**Простий спосіб:**
+**Простий спосіб (рекомендований v2.1):**
 
 ```python
 import asyncio
-from opcua import OPCUAReader
+from src.opcua import OPCUAReader
 
 async def read_data():
     # Підключитися та прочитати
@@ -44,6 +44,14 @@ async def read_data():
 
 # Запустити
 asyncio.run(read_data())
+```
+
+**Старий API (deprecated, але працює):**
+
+```python
+# Працює через compatibility wrapper
+from opcua import OPCUAReader
+# Видасть DeprecationWarning, використовуйте src.opcua замість opcua
 ```
 
 **Що отримаєте:**
@@ -65,12 +73,11 @@ asyncio.run(read_data())
 
 ### Через Python код
 
-**Простий приклад:**
+**Спосіб 1: Використання OPCUAWriter класу (рекомендований v2.1):**
 
 ```python
 import asyncio
-from asyncua import Client
-from opcua_writer import write_values
+from src.opcua import OPCUAWriter
 
 async def write_data():
     # Дані для запису (шлях.змінна: значення)
@@ -78,19 +85,49 @@ async def write_data():
         "cepn1.sensor1": 1,
         "cepn1.sensor2": 0,
     }
-    
+
     # Підключитися та записати
-    async with Client("opc.tcp://10.15.194.150:4840") as client:
-        results = await write_values(client, data)
+    async with OPCUAWriter("opc.tcp://10.15.194.150:4840") as writer:
+        results = await writer.write(data)
         print(f"Записано: {sum(results.values())}/{len(results)}")
 
 # Запустити
 asyncio.run(write_data())
 ```
 
+**Спосіб 2: Низькорівневий (через функцію write_values):**
+
+```python
+import asyncio
+from asyncua import Client
+from src.opcua import write_values
+
+async def write_data():
+    data = {
+        "cepn1.sensor1": 1,
+        "cepn1.sensor2": 0,
+    }
+
+    async with Client("opc.tcp://10.15.194.150:4840") as client:
+        results = await write_values(client, data)
+        print(f"Записано: {sum(results.values())}/{len(results)}")
+
+asyncio.run(write_data())
+```
+
+**Старий API (deprecated):**
+
+```python
+# Працює через compatibility wrapper
+from opcua_writer import write_values
+# Видасть DeprecationWarning
+```
+
 **Кілька вузлів одночасно:**
 
 ```python
+from src.opcua import OPCUAWriter
+
 data = {
     "cepn1.test": 1,
     "cepn1.frequency": 1500,
@@ -98,8 +135,8 @@ data = {
     "valve2.position": 75,
 }
 
-async with Client("opc.tcp://10.15.194.150:4840") as client:
-    results = await write_values(client, data)
+async with OPCUAWriter("opc.tcp://10.15.194.150:4840") as writer:
+    results = await writer.write(data)
     print(f"✓ Успішно: {sum(results.values())}")
 ```
 
@@ -109,26 +146,24 @@ async with Client("opc.tcp://10.15.194.150:4840") as client:
 
 ```python
 import asyncio
-from opcua import OPCUAReader
-from asyncua import Client
-from opcua_writer import write_values
+from src.opcua import OPCUAReader, OPCUAWriter
 
 async def main():
     # 1. Прочитати поточні значення
     async with OPCUAReader("opc.tcp://10.15.194.150:4840") as reader:
         data = await reader.read_node("cepn1")
         print(f"Поточні значення: {data}")
-    
+
     # 2. Записати нові значення
     new_data = {
         "cepn1.sensor1": 1,
         "cepn1.test": 0,
     }
-    
-    async with Client("opc.tcp://10.15.194.150:4840") as client:
-        results = await write_values(client, new_data)
+
+    async with OPCUAWriter("opc.tcp://10.15.194.150:4840") as writer:
+        results = await writer.write(new_data)
         print(f"Записано: {sum(results.values())}/{len(results)}")
-    
+
     # 3. Перевірити зміни
     async with OPCUAReader("opc.tcp://10.15.194.150:4840") as reader:
         data = await reader.read_node("cepn1")
@@ -160,7 +195,7 @@ data = {
 
 ```bash
 # Активувати середовище
-source venv/bin/activate
+source .venv/bin/activate
 
 # Прочитати cepn1
 python opcua_reader.py opc.tcp://10.15.194.150:4840 --node cepn1
@@ -168,8 +203,10 @@ python opcua_reader.py opc.tcp://10.15.194.150:4840 --node cepn1
 # Прочитати valve1 в JSON
 python opcua_reader.py opc.tcp://10.15.194.150:4840 --node valve1 --format json
 
-# Запустити приклад
-python main.py
+# Запустити приклади
+python examples/simple_reader.py
+python examples/simple_writer.py
+python examples/combined_operations.py
 ```
 
 ---
@@ -185,6 +222,8 @@ python opcua_reader.py opc.tcp://localhost:4840 --node cepn1
 Або в коді:
 
 ```python
+from src.opcua import OPCUAReader
+
 async with OPCUAReader("opc.tcp://10.15.194.150:4840") as reader:
     data = await reader.read_node("cepn1")
     sensor_value = data["cepn1"]["sensor1"]
@@ -194,10 +233,12 @@ async with OPCUAReader("opc.tcp://10.15.194.150:4840") as reader:
 ### Задача 2: Встановити значення
 
 ```python
+from src.opcua import OPCUAWriter
+
 data = {"cepn1.sensor1": 1}
 
-async with Client("opc.tcp://10.15.194.150:4840") as client:
-    await write_values(client, data)
+async with OPCUAWriter("opc.tcp://10.15.194.150:4840") as writer:
+    await writer.write(data)
 ```
 
 ### Задача 3: Прочитати всі доступні вузли
@@ -209,14 +250,16 @@ python opcua_reader.py opc.tcp://10.15.194.150:4840
 ### Задача 4: Змінити кілька параметрів
 
 ```python
+from src.opcua import OPCUAWriter
+
 data = {
     "cepn1.test": 1,
     "cepn1.frequency": 1500,
     "cepn1.run": True,
 }
 
-async with Client("opc.tcp://10.15.194.150:4840") as client:
-    results = await write_values(client, data)
+async with OPCUAWriter("opc.tcp://10.15.194.150:4840") as writer:
+    results = await writer.write(data)
 ```
 
 ---
@@ -237,7 +280,8 @@ async with Client("opc.tcp://10.15.194.150:4840") as client:
 
 **Помилка: "ModuleNotFoundError"**
 ```
-→ Активуйте venv: source venv/bin/activate
+→ Активуйте .venv: source .venv/bin/activate
+→ Встановіть залежності: pip install -r requirements.txt
 ```
 
 ---
@@ -250,5 +294,5 @@ async with Client("opc.tcp://10.15.194.150:4840") as client:
 
 ---
 
-**Версія**: 2.0 | **Python**: >= 3.8
+**Версія**: 2.1 | **Python**: >= 3.8 | **Архітектура**: Модульна src/ layout
 
